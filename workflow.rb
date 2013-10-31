@@ -4,7 +4,6 @@ require 'rbbt/workflow'
 require 'rbbt/statistics/hypergeometric'
 require 'rbbt/statistics/random_walk'
 
-Workflow.require_workflow 'TSVWorkflow'
 Workflow.require_workflow 'Genomics'
 require 'genomics_kb'
 require 'rbbt/entity/genomic_mutation'
