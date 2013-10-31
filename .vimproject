@@ -1,0 +1,23 @@
+mutation_enrichment=/$PWD filter="*.rb *.R *.js *.sass *.haml *.tsv" {
+ workflow.rb
+ workflow.md
+ lib=lib {
+  sinatra.rb
+ }
+ test=test{
+ }
+ www=www {
+  views=views{
+   entity=entity{
+    Study=Study{
+     sample_enrichment.haml
+    }
+   }
+   entity_list=entity_list{
+    GenomicMutation=GenomicMutation{
+     enrichment.haml
+    }
+   }
+  }
+ }
+}
