@@ -6,6 +6,7 @@ require 'rbbt/statistics/random_walk'
 
 Workflow.require_workflow 'Genomics'
 require 'genomics_kb'
+require 'rbbt/entity/gene'
 require 'rbbt/entity/genomic_mutation'
 
 module MutationEnrichment
@@ -160,10 +161,11 @@ module MutationEnrichment
       end
     end
 
-    log :mutation_genes, "Finding genes overlapping mutatiosn"
+    log :mutation_genes, "Finding genes overlapping mutations"
     mutation_genes = {}
     gene_mutations = {}
     mutations.genes.zip(mutations.clean_annotations).each do |genes, mutation|
+      next if genes.nil?
       mutation_genes[mutation] = genes.sort
       genes.each do |gene|
         gene_mutations[gene] ||= []
@@ -173,7 +175,7 @@ module MutationEnrichment
     mutations = mutations.clean_annotations
 
     log :covered_mutations, "Finding mutations overlapping genes in pathway"
-    covered_mutations = mutations.select{|mutation| Misc.intersect_sorted_arrays(mutation_genes[mutation].dup, all_db_genes.dup).any? }.length
+    covered_mutations = mutations.select{|mutation| Misc.intersect_sorted_arrays((mutation_genes[mutation] || []).dup, all_db_genes.dup).any? }.length
     set_info :covered_mutations, covered_mutations
 
     log :pvalue, "Calculating binomial pvalues"

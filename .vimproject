@@ -6,6 +6,11 @@ mutation_enrichment=/$PWD filter="*.rb *.R *.js *.sass *.haml *.tsv" {
  }
  test=test{
  }
+ share=share{
+  rbbt_commands=rbbt_commands{
+   bootstrap
+  }
+ }
  www=www {
   views=views{
    entity=entity{
