@@ -1852,8 +1852,11 @@ MutationEnrichment::DATABASES.each do |database|
   end
 end
 
+jobs.shuffle! 
+
+procs = ARGV.shift || "1"
 require 'rbbt/util/semaphore'
-RbbtSemaphore.fork_each_on_semaphore(jobs, 10) do |job|
+RbbtSemaphore.fork_each_on_semaphore(jobs, procs.to_i) do |job|
   job.run(true)
 end
 
