@@ -179,19 +179,21 @@ module MutationEnrichment
     set_info :covered_mutations, covered_mutations
 
     log :pvalue, "Calculating binomial pvalues"
-    pvalues = TSV.setup({}, :key_field => database_tsv.fields.first, :fields => ["Matches", "Pathway total", "p-value", "Ensembl Gene ID"], :namespace => organism, :type => :double)
+    pvalues = TSV.setup({}, :key_field => database_tsv.fields.first, :fields => ["Matches", "Pathway total", "Ensembl Gene ID"], :namespace => organism, :type => :double)
     counts.unnamed = true
     affected_genes_per_pathway.each do |pathway, genes|
       pathway_total = counts[pathway]
-      #matches = mutations.select{|mutation| Misc.intersect_sorted_arrays(mutation_genes[mutation], genes.sort).any? }.length
       matches = gene_mutations.values_at(*genes).compact.flatten.length
-      pvalue = RSRuby.instance.binom_test(matches, covered_mutations, pathway_total.to_f / total_covered.to_f, "greater")["p.value"]
 
       common_genes = affected_genes.subset(genes).uniq
-      pvalues[pathway] = [[matches], [pathway_total], [pvalue], common_genes.sort_by{|g| g.name || g}]
+      pvalues[pathway] = [[matches], [pathway_total], common_genes.sort_by{|g| g.name || g}]
     end
 
-    FDR.adjust_hash! pvalues, 2 if fdr
+    pvalues = pvalues.R("pvalues = apply(data, 1, function(v){ binom.test(as.numeric(v[1]), #{ covered_mutations }, as.numeric(v[2]) /  #{total_covered.to_f}, 'greater')$p.value });
+      data = cbind(data, p.value = pvalues);
+      data = data[names(data)[c(1,2,4,3)]];", :key => pvalues.key_field, :cast => :to_f)
+    
+    pvalues = FDR.adjust_hash! pvalues, 2 if fdr
 
     set_info :total_covered, total_covered
 
@@ -201,7 +203,7 @@ module MutationEnrichment
 
   #{{{ Sample enrichment
   
-  dep do |jobname, inputs| job(inputs[:baseline], inputs[:database].to_s, inputs) end
+  dep do |jobname, inputs| inputs[:baseline] ||= :pathway_base_counts; job(inputs[:baseline], inputs[:database].to_s, inputs) end
   input :database, :select, "Database code", nil, :select_options => DATABASES
   input :baseline, :select, "Type of baseline to use", :pathway_base_counts, :select_options => [:pathway_base_counts, :pathway_gene_counts]
   input :mutations, :tsv, "Genomic Mutation and Sample. Example row: '10:12345678:A{TAB}Sample01{TAB}Sample02'"
@@ -275,7 +277,7 @@ module MutationEnrichment
           pathway_counts.through do |pathway, count|
             next unless affected_samples_per_pathway.include?(pathway) and affected_samples_per_pathway[pathway].any?
             ratio = count.to_f / total_covered
-            num_token_list = RSRuby.instance.rbinom(permutations, sample_mutation_tokens.length, ratio)
+            num_token_list = R.eval_a "rbinom(#{ permutations }, #{ sample_mutation_tokens.length }, #{ ratio })"
             pathway_expected_counts[pathway] = num_token_list.collect{|num_tokens|
               # Add 1 to estabilize estimates
               Misc.sample(sample_mutation_tokens, num_tokens.to_i).uniq.length + 1
