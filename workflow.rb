@@ -51,6 +51,7 @@ module MutationEnrichment
                                              else
                                                pathway_field, gene_field = target_field, source_field
                                                total_genes = total_keys
+                                               total_genes = Gene.setup(tsv.values.flatten.compact.uniq, gene_field, organism)
                                              end
 
                                              tsv.namespace = organism
