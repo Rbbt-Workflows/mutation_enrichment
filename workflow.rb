@@ -176,6 +176,8 @@ module MutationEnrichment
     mutations = mutations.clean_annotations
 
     log :covered_mutations, "Finding mutations overlapping genes in pathway"
+    all_db_genes = all_db_genes.ensembl
+
     covered_mutations = mutations.select{|mutation| Misc.intersect_sorted_arrays((mutation_genes[mutation] || []).dup, all_db_genes.dup).any? }.length
     set_info :covered_mutations, covered_mutations
 
