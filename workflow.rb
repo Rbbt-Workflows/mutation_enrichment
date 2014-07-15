@@ -25,39 +25,67 @@ module MutationEnrichment
 
   DATABASES = Genomics.knowledge_base.registry.keys
 
+  #helper :database_info do |database, organism|
+  #  @database_info ||= {}
+  #  @database_info[database] ||= {}
+  #  @database_info[database][organism] ||= begin
+  #                                           @organism_kb ||= {}
+  #                                           @organism_kb[organism] ||= begin
+  #                                                                        dir = MutationEnrichment.knowledge_base_dir
+
+  #                                                                        kb = KnowledgeBase.new dir, organism
+  #                                                                        kb.format["Gene"] = "Ensembl Gene ID"
+  #                                                                        kb.registry = Genomics.knowledge_base.registry
+
+  #                                                                        kb
+  #                                                                      end
+
+  #                                           db = @organism_kb[organism].get_database(database, :persist => true)
+
+
+  #                                           tsv, total_keys, source_field, target_field = [db, db.keys, db.key_field, db.fields.first]
+
+  #                                           if target_field == "Ensembl Gene ID"
+  #                                             pathway_field, gene_field = source_field, target_field
+  #                                             total_genes = Gene.setup(tsv.values.flatten.compact.uniq, "Ensembl Gene ID", organism)
+  #                                           else
+  #                                             pathway_field, gene_field = target_field, source_field
+  #                                             total_genes = total_keys
+  #                                             total_genes = Gene.setup(tsv.values.flatten.compact.uniq, gene_field, organism)
+  #                                           end
+
+  #                                           tsv.namespace = organism
+
+  #                                           [tsv, total_genes, gene_field, pathway_field]
+  #                                         end
+  #end
+
   helper :database_info do |database, organism|
-    @database_info ||= {}
-    @database_info[database] ||= {}
-    @database_info[database][organism] ||= begin
-                                             @organism_kb ||= {}
-                                             @organism_kb[organism] ||= begin
-                                                                          dir = MutationEnrichment.knowledge_base_dir
+    @organism_kb ||= {}
+    @organism_kb[organism] ||= begin
+                                 dir = MutationEnrichment.knowledge_base_dir
 
-                                                                          kb = KnowledgeBase.new dir, organism
-                                                                          kb.format["Gene"] = "Ensembl Gene ID"
-                                                                          kb.registry = Genomics.knowledge_base.registry
+                                 kb = KnowledgeBase.new dir, organism
+                                 kb.format["Gene"] = "Ensembl Gene ID"
+                                 kb.registry = Genomics.knowledge_base.registry
+                                 kb
+                               end
 
-                                                                          kb
-                                                                        end
+    db = @organism_kb[organism].get_database(database, :persist => true)
 
-                                             db = @organism_kb[organism].get_database(database, :persist => true)
+    tsv, total_keys, source_field, target_field = [db, db.keys, db.key_field, db.fields.first]
 
+    if target_field == "Ensembl Gene ID"
+      pathway_field, gene_field = source_field, target_field
+      total_genes = Gene.setup(tsv.values.flatten.compact.uniq, "Ensembl Gene ID", organism)
+    else
+      pathway_field, gene_field = target_field, source_field
+      total_genes = total_keys
+    end
 
-                                             tsv, total_keys, source_field, target_field = [db, db.keys, db.key_field, db.fields.first]
+    tsv.namespace = organism
 
-                                             if target_field == "Ensembl Gene ID"
-                                               pathway_field, gene_field = source_field, target_field
-                                               total_genes = Gene.setup(tsv.values.flatten.compact.uniq, "Ensembl Gene ID", organism)
-                                             else
-                                               pathway_field, gene_field = target_field, source_field
-                                               total_genes = total_keys
-                                               total_genes = Gene.setup(tsv.values.flatten.compact.uniq, gene_field, organism)
-                                             end
-
-                                             tsv.namespace = organism
-
-                                             [tsv, total_genes, gene_field, pathway_field]
-                                           end
+    [tsv, total_genes, gene_field, pathway_field]
   end
 
   #{{{ BASE AND GENE COUNTS
@@ -79,7 +107,7 @@ module MutationEnrichment
       tsv.through do |pathway, values|
         genes = values[0]
         next if genes.nil? or genes.empty? 
-        size = Gene.gene_list_exon_bases(genes.compact.uniq.remove(masked_genes))
+        size = Gene.gene_list_exon_bases((genes.compact.uniq - masked_genes))
         counts[pathway] = size
       end
     end
