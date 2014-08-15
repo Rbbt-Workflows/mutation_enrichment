@@ -1840,23 +1840,34 @@ mutations = {}
 
 mutations_hg18, mutations_hg19 = MUTATIONS.split("@").collect{|l| l.split("\n").collect{|m| m.strip} }  
 
-mutations["Hsa/may2009"] = mutations_hg18
-mutations["Hsa/jun2011"] = mutations_hg19
-mutations["Hsa/jan2013"] = mutations_hg19
-mutations["Hsa"] = mutations_hg19
+require 'rbbt/workflow'
+
+Workflow.require_workflow "Sequence"
+
+mutations = {}
+
+Organism.organism_codes.each do |code|
+    if code =~ /Hsa/
+        build = Organism.hg_build code
+        mutations[code] = build == 'hg19' ? mutations_hg19 : mutations_hg18
+    else
+        mutations[code] = []
+        Organism.chromosomes(code).list.each do |chromosome|
+            mutations[code] << [chromosomes, "20000", ":T"]
+        end
+    end
+end
 
 jobs = []
 MutationEnrichment::DATABASES.each do |database|
-  %w(Hsa Hsa/jun2011 Hsa/may2009 Hsa/jan2013).each do |organism|
-    jobs << MutationEnrichment.job(:mutation_pathway_enrichment, "BOOTSTRAP", :mutations => mutations[organism].dup, :organism => organism, :database => database)
+  mutations.keys.each do |organism|
+    jobs << MutationEnrichment.job(:mutation_pathway_enrichment, "BOOTSTRAP-#{organism}-#{database}", :mutations => mutations[organism].dup, :organism => organism, :database => database)
   end
 end
 
 jobs.shuffle! 
-
-procs = ARGV.shift || "1"
+procs = ARGV.shift 
 require 'rbbt/util/semaphore'
-RbbtSemaphore.fork_each_on_semaphore(jobs, procs.to_i) do |job|
-  job.run(true)
+Misc.bootstrap(jobs, 1) do |job|
+  job.run
 end
-

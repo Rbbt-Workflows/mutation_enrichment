@@ -25,41 +25,6 @@ module MutationEnrichment
 
   DATABASES = Genomics.knowledge_base.registry.keys
 
-  #helper :database_info do |database, organism|
-  #  @database_info ||= {}
-  #  @database_info[database] ||= {}
-  #  @database_info[database][organism] ||= begin
-  #                                           @organism_kb ||= {}
-  #                                           @organism_kb[organism] ||= begin
-  #                                                                        dir = MutationEnrichment.knowledge_base_dir
-
-  #                                                                        kb = KnowledgeBase.new dir, organism
-  #                                                                        kb.format["Gene"] = "Ensembl Gene ID"
-  #                                                                        kb.registry = Genomics.knowledge_base.registry
-
-  #                                                                        kb
-  #                                                                      end
-
-  #                                           db = @organism_kb[organism].get_database(database, :persist => true)
-
-
-  #                                           tsv, total_keys, source_field, target_field = [db, db.keys, db.key_field, db.fields.first]
-
-  #                                           if target_field == "Ensembl Gene ID"
-  #                                             pathway_field, gene_field = source_field, target_field
-  #                                             total_genes = Gene.setup(tsv.values.flatten.compact.uniq, "Ensembl Gene ID", organism)
-  #                                           else
-  #                                             pathway_field, gene_field = target_field, source_field
-  #                                             total_genes = total_keys
-  #                                             total_genes = Gene.setup(tsv.values.flatten.compact.uniq, gene_field, organism)
-  #                                           end
-
-  #                                           tsv.namespace = organism
-
-  #                                           [tsv, total_genes, gene_field, pathway_field]
-  #                                         end
-  #end
-
   helper :database_info do |database, organism|
     @organism_kb ||= {}
     @organism_kb[organism] ||= begin
@@ -80,7 +45,7 @@ module MutationEnrichment
       total_genes = Gene.setup(tsv.values.flatten.compact.uniq, "Ensembl Gene ID", organism)
     else
       pathway_field, gene_field = target_field, source_field
-      total_genes = total_keys
+      total_genes = Gene.setup(total_keys, gene_field, organism)
     end
 
     tsv.namespace = organism
@@ -105,7 +70,7 @@ module MutationEnrichment
     log :processing_database, "Processing database #{database}"
     tsv.with_monitor :desc => "Computing exon bases for pathways" do
       tsv.through do |pathway, values|
-        genes = values[0]
+        genes = values.flatten
         next if genes.nil? or genes.empty? 
         size = Gene.gene_list_exon_bases((genes.compact.uniq - masked_genes))
         counts[pathway] = size
@@ -113,10 +78,10 @@ module MutationEnrichment
     end
 
     log :computing_exome_size, "Computing number of exome bases covered by pathway annotations"
-    total_size = Gene.gene_list_exon_bases(total_genes.remove(masked_genes))
+    total_size = Gene.gene_list_exon_bases(total_genes - masked_genes)
 
     set_info :total_size, total_size
-    set_info :total_gene_list, total_genes.remove(masked_genes).clean_annotations
+    set_info :total_gene_list, (total_genes - masked_genes)
 
     counts
   end
@@ -181,7 +146,7 @@ module MutationEnrichment
     database_tsv.with_unnamed do
       affected_genes.each do |gene|
         next unless database_tsv[gene]
-        pathways = database_tsv[gene][0]
+        pathways = database_tsv[gene].flatten
         next if pathways.nil? or pathways.empty?
         pathways.uniq.each do |pathway|
           affected_genes_per_pathway[pathway] ||= []
