@@ -187,7 +187,11 @@ module MutationEnrichment
 
     pvalues = pvalues.R("pvalues = apply(data, 1, function(v){ binom.test(as.numeric(v[1]), #{ covered_mutations }, as.numeric(v[2]) /  #{total_covered.to_f}, 'greater')$p.value });
       data = cbind(data, p.value = pvalues);
-      data = data[names(data)[c(1,2,4,3)]];", :key => pvalues.key_field, :cast => :to_f)
+      data = data[names(data)[c(1,2,4,3)]];", :key => pvalues.key_field)
+
+    pvalues.process "p.value" do |v|
+      v.to_f
+    end
 
     pvalues = FDR.adjust_hash! pvalues, 2 if fdr
 

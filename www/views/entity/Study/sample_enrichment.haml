@@ -12,8 +12,5 @@
 = action_card_render action_card do
 
   = table :table_id => "Sample enrichment (#{ database }) for #{ entity }", :page => "1~p-value" do
-    - matches = entity.subset(:sample_mutations)
-    - mutations = matches.tsv.to_double.reorder "Sample", ["Genomic Mutation"], :merge => true
-    - tsv = MutationEnrichment.job(:sample_pathway_enrichment, entity, :organism => entity.organism, :mutations => mutations, :baseline => :pathway_base_counts, :database => database, :cutoff => cutoff).clean.run
-    - tsv.select("p-value"){|p| p.to_s.to_f < cutoff.to_f}
+    - entity.sample_enrichment(:database => database).select("p-value"){|p| p = p.first if Array === p; p.to_f <= cutoff.to_f}
  
