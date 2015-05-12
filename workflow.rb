@@ -255,7 +255,7 @@ module MutationEnrichment
   dep do |jobname, inputs| inputs[:baseline] ||= :pathway_base_counts; job(inputs[:baseline], inputs[:database].to_s, inputs) end
   input :database, :select, "Database code", nil, :select_options => DATABASES
   input :baseline, :select, "Type of baseline to use", :pathway_base_counts, :select_options => [:pathway_base_counts, :pathway_gene_counts]
-  input :mutations, :tsv, "Genomic Mutation and Sample. Example row: '10:12345678:A{TAB}Sample01{TAB}Sample02'"
+  input :mutations, :tsv, "Genomic Mutation and Sample. Example row '10:12345678:A{TAB}Sample01{TAB}Sample02'"
   input :permutations, :integer, "Number of permutations in test", 10000
   input :fdr, :boolean, "BH FDR corrections", true
   input :masked_genes, :array, "Ensembl Gene ID list of genes to mask", []
@@ -274,14 +274,21 @@ module MutationEnrichment
       mutations.type = :double
     end
 
-    database_g2p, all_db_genes, gene_field, pathway_field = database_info database, organism
+    database, all_db_genes, gene_field, pathway_field = database_info database, organism
 
     all_db_genes = all_db_genes.ensembl
 
-    database_p2g = database_g2p.reorder pathway_field, [gene_field]
+    if database.key_field == pathway_field
+      database_p2g = database
+      database_g2p = database_p2g.reorder 0, [:key]
+    else
+      database_g2p = database
+      database_p2g = database_p2g.reorder 0, [:key]
+    end
 
     all_mutations = GenomicMutation.setup(mutations.keys, "MutationEnrichment", organism, watson)
     mutation_genes = Misc.process_to_hash(all_mutations){|all_mutations| all_mutations.genes}
+    mutation_genes = Sequence.job(:affected_genes, clean_name, :mutations => all_mutations).run
 
     affected_samples_per_pathway = TSV.setup({}, :key_field => pathway_field, :fields => ["Sample"], :type => :flat)
     covered_genes_per_samples = {}
@@ -294,7 +301,9 @@ module MutationEnrichment
       samples = samples.flatten
 
       next if mutation_genes[mutation].nil? or mutation_genes[mutation].empty?
-      pathways = database_g2p.values_at(*(mutation_genes[mutation].to(gene_field))).compact.flatten.compact
+      _genes = mutation_genes[mutation]
+      _genes = _genes.to(gene_field)
+      pathways = database_g2p.values_at(*_genes).compact.flatten.compact
       next if pathways.empty?
       pathways.each do |pathway|
         affected_samples_per_pathway[pathway] ||= []
@@ -320,8 +329,8 @@ module MutationEnrichment
 
     pathway_expected_counts = {}
     log :expected_counts, "Calculating expected counts"
-    pathway_counts.with_monitor :desc => "Calculating expected counts" do
-      pathway_counts.with_unnamed do
+    pathway_counts.with_unnamed do
+      pathway_counts.with_monitor :desc => "Calculating expected counts" do
         affected_samples_per_pathway.with_unnamed do
           pathway_counts.through do |pathway, count|
             next unless affected_samples_per_pathway.include?(pathway) and affected_samples_per_pathway[pathway].any?
