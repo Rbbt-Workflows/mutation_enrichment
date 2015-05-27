@@ -158,22 +158,32 @@ module MutationEnrichment
   input :mutations, :array, "Genomic Mutation"
   input :fdr, :boolean, "BH FDR corrections", true
   input :masked_genes, :array, "Ensembl Gene ID list of genes to mask", []
+  input :background, :array, "Enrichment background", nil
+  input :invert_background, :boolean, "Restrict to elements NOT in background"
   input :organism, :string, "Organism code", Organism.default_code("Hsa")
   input :watson, :boolean, "Alleles reported in the watson (forward) strand", true
-  task :mutation_pathway_enrichment => :tsv do |database,baseline,mutations,fdr,masked_genes,organism, watson|
+  task :mutation_pathway_enrichment => :tsv do |database,baseline,mutations,fdr,masked_genes,background,invert_background,organism, watson|
     counts        = step(baseline).load
     total_covered = step(baseline).info[:total_size] || step(baseline).info[:total_genes]
     GenomicMutation.setup(mutations, "MutationEnrichment", organism, watson)
 
 
+    masked_genes = background if background and invert_background
+
     affected_genes = mutations.genes.compact.flatten.uniq
-    affected_genes = affected_genes.remove(masked_genes)
+    affected_genes = affected_genes.remove(masked_genes) if masked_genes and masked_genes.any?
+    affected_genes = affected_genes.subset(background) if background and not background.empty? and not invert_background
 
     # Get database tsv and native ids
 
     database_tsv, all_db_genes, db_gene_field, db_pathway_field = database_info database, organism
 
-    all_db_genes = all_db_genes.ensembl.remove(masked_genes).compact.sort
+    all_db_genes = all_db_genes.ensembl
+    all_db_genes = all_db_genes.remove(masked_genes) if masked_genes and masked_genes.any?
+    all_db_genes = all_db_genes.subset(background) if background and not background.empty? and not invert_background
+    all_db_genes.compact!
+    all_db_genes.sort!
+
 
     database_tsv = database_tsv.reorder db_gene_field, [db_pathway_field]
 
