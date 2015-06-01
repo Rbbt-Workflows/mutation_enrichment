@@ -99,14 +99,15 @@ module MutationEnrichment
     tsv, total_genes, gene_field, pathway_field = database_info database, organism
 
     if pathway_field != gene_field
-      tsv = tsv.reorder pathway_field, [gene_field]
+      tsv = tsv.reorder pathway_field, [gene_field], :persist => true
     else
-      tsv = tsv.reorder 0, [:key]
+      tsv = tsv.reorder 0, [:key], :persist => true
     end
 
     counts = TSV.setup({}, :key_field => tsv.key_field, :fields => ["Bases"], :type => :single, :cast => :to_i, :namespace => organism)
 
     log :processing_database, "Processing database #{database}"
+    tsv.unnamed = true
     tsv.with_monitor :desc => "Computing exon bases for pathways" do
       tsv.through do |pathway, values|
         next if values.empty?
@@ -288,6 +289,7 @@ module MutationEnrichment
 
     all_db_genes = all_db_genes.ensembl
 
+    log :reordering, "Reordering database"
     if database.key_field == pathway_field
       database_p2g = database
       database_g2p = database_p2g.reorder 0, [:key]
@@ -296,8 +298,8 @@ module MutationEnrichment
       database_p2g = database_p2g.reorder 0, [:key]
     end
 
+    log :affected_genes, "Getting affected genes"
     all_mutations = GenomicMutation.setup(mutations.keys, "MutationEnrichment", organism, watson)
-    mutation_genes = Misc.process_to_hash(all_mutations){|all_mutations| all_mutations.genes}
     mutation_genes = Sequence.job(:affected_genes, clean_name, :mutations => all_mutations).run
 
     affected_samples_per_pathway = TSV.setup({}, :key_field => pathway_field, :fields => ["Sample"], :type => :flat)
@@ -306,8 +308,9 @@ module MutationEnrichment
     sample_mutation_tokens = []
     covered_mutations = []
     log :classify, "Classifying mutations by pathway"
-    mutations.slice("Sample").each do |mutation,samples|
-      samples = [samples] unless Array === samples
+    TSV.traverse mutations, :fields => ["Sample"], :type => :flat do |mutation,samples|
+      mutation = mutation.first if Array === mutation
+      samples = samples.split("|") unless Array === samples
       samples = samples.flatten
 
       next if mutation_genes[mutation].nil? or mutation_genes[mutation].empty?
@@ -343,7 +346,7 @@ module MutationEnrichment
       pathway_counts.with_monitor :desc => "Calculating expected counts" do
         affected_samples_per_pathway.with_unnamed do
           pathway_counts.through do |pathway, count|
-            next unless affected_samples_per_pathway.include?(pathway) and affected_samples_per_pathway[pathway].any?
+            next unless affected_samples_per_pathway.include?(pathway) and affected_samples_per_pathway[pathway].length > 1
             ratio = count.to_f / total_covered
             num_token_list = R.eval_a "rbinom(#{ permutations }, #{ sample_mutation_tokens.length }, #{ ratio })"
             pathway_expected_counts[pathway] = num_token_list.collect{|num_tokens|
