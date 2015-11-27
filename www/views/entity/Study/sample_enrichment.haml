@@ -11,6 +11,7 @@
 - action_card.require :database, :cutoff
 = action_card_render action_card do
 
+  - header "Sample", "Sample", :cohort => entity
   = table :table_id => "Sample enrichment (#{ database }) for #{ entity }", :page => "1~p-value" do
     - entity.sample_enrichment(:database => database).select("p-value"){|p| p = p.first if Array === p; p.to_f <= cutoff.to_f}
  
