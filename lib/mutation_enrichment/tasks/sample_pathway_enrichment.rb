@@ -249,7 +249,10 @@ module MutationEnrichment
       count = samples.length
       expected = Misc.mean(pathway_expected_counts[pathway]).floor
       next if count <= expected
-      pvalue = pathway_expected_counts[pathway].select{|exp_c| exp_c > count}.length.to_f / permutations
+
+      better_count = pathway_expected_counts[pathway].select{|exp_c| exp_c >= count}.length
+      pvalue = (1.0 + better_count) / (1.0 + permutations)
+
       tsv[pathway] = [samples.sort, [count], [expected], [count.to_f / expected], [pathway_counts[pathway]], [pvalue], matched_genes]
     end
 
