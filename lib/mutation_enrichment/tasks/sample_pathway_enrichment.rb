@@ -134,12 +134,19 @@ module MutationEnrichment
   dep do |jobname, inputs| inputs[:baseline] ||= :pathway_base_counts; job(inputs[:baseline], inputs[:database].to_s, inputs) end
   input :database, :select, "Database code", nil, :select_options => DATABASES
   input :baseline, :select, "Type of baseline to use", :pathway_base_counts, :select_options => [:pathway_base_counts, :pathway_gene_counts]
-  input :mutations, :tsv, "Genomic Mutation and Sample. Example row '10:12345678:A{TAB}Sample01{TAB}Sample02'", nil, :stream => true
+  input :mutations, :tsv, "Genomic Mutation and Sample. Example row '10:12345678:A{TAB}Sample01{TAB}Sample02'", nil, :stream => false
   input :permutations, :integer, "Number of permutations in test", 10000
   input :fdr, :boolean, "BH FDR corrections", true
   input :masked_genes, :array, "Ensembl Gene ID list of genes to mask", []
   input :organism, :string, "Organism code", Organism.default_code("Hsa")
   input :watson, :boolean, "Alleles reported in the watson (forward) strand", true
+  dep Sequence, :affected_genes, :compute => :produce, :mutations => :mutations, :organism => :organism, :watson => :watson do |jobname,options|
+    all_mutations = TSV.traverse options[:mutations], :into => :stream, :type => :keys do |mutation|
+      mutation = mutation.first if Array === mutation
+      mutation
+    end
+    Sequence.job(:affected_genes, jobname, options.merge(:mutations => all_mutations))
+  end
   task :sample_pathway_enrichment => :tsv do |database,baseline,mutations,permutations,fdr,masked_genes,organism,watson|
     pathway_counts                         = step(baseline).load
     total_covered                          = step(baseline).info[:total_size] || step(baseline).info[:total_genes]
@@ -175,14 +182,15 @@ module MutationEnrichment
 
       mutations = tmp_file
 
-      log :affected_genes, "Getting affected genes"
-      all_mutations = TSV.traverse mutations, :into => :stream, :type => :keys do |mutation|
-        mutation = mutation.first if Array === mutation
-        mutation
-      end
+      #log :affected_genes, "Getting affected genes"
+      #all_mutations = TSV.traverse mutations, :into => :stream, :type => :keys do |mutation|
+      #  mutation = mutation.first if Array === mutation
+      #  mutation
+      #end
 
-      mutation_genes_job = Sequence.job(:affected_genes, clean_name, :mutations => all_mutations, :organism => organism)
-      mutation_genes_job.recursive_clean.produce
+      #mutation_genes_job = Sequence.job(:affected_genes, clean_name, :mutations => all_mutations, :organism => organism)
+      #mutation_genes_job.recursive_clean.produce
+      mutation_genes_job = step(:affected_genes)
       mutation_genes = mutation_genes_job.path.tsv :persist => true, :persist_file => file('mutation_genes.tch')
 
       TSV.traverse mutations, :bar => self.progress_bar("Classifying mutations by pathway"), :type => :flat do |mutation,samples|
