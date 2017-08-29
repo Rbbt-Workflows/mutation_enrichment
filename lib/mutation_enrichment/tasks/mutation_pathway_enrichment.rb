@@ -14,10 +14,9 @@ module MutationEnrichment
     total_covered = step(baseline).info[:total_size] || step(baseline).info[:total_genes]
     GenomicMutation.setup(mutations, "MutationEnrichment", organism, watson)
 
-
     masked_genes = background if background and invert_background
 
-    affected_genes = mutations.genes.compact.flatten.uniq
+    affected_genes = mutations.affected_genes.compact.flatten.uniq
     affected_genes = affected_genes.remove(masked_genes) if masked_genes and masked_genes.any?
     affected_genes = affected_genes.subset(background) if background and not background.empty? and not invert_background
 
@@ -33,7 +32,6 @@ module MutationEnrichment
 
 
     database_tsv = database_tsv.reorder db_gene_field, [db_pathway_field]
-
 
     # Annotate each pathway with the affected genes that are involved in it
 
@@ -56,7 +54,7 @@ module MutationEnrichment
     log :mutation_genes, "Finding genes overlapping mutations"
     mutation_genes = {}
     gene_mutations = {}
-    mutations.genes.zip(mutations.clean_annotations).each do |genes, mutation|
+    mutations.affected_genes.zip(mutations.clean_annotations).each do |genes, mutation|
       next if genes.nil?
       mutation_genes[mutation] = genes.sort
       genes.each do |gene|

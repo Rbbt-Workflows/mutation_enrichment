@@ -162,7 +162,7 @@ module MutationEnrichment
       database_g2p = database_p2g.reorder 0, [:key], :persist => true
     else
       database_g2p = database
-      database_p2g = database_p2g.reorder 0, [:key], :persist => true
+      database_p2g = database_g2p.reorder 0, [:key], :persist => true
     end
 
     affected_samples_per_pathway = TSV.setup({}, :key_field => pathway_field, :fields => ["Sample"], :type => :flat)
